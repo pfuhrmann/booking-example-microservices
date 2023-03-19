@@ -1,0 +1,94 @@
+version: "3.9"
+
+services:
+  app:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./.docker/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - laravel
+      - redis
+      - db
+      - rabbitmq
+
+  laravel:
+    build:
+      context: .
+      dockerfile: ./.docker/php-fpm/Dockerfile
+    volumes:
+      - ./laravel:/app
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_VHOST: /
+#    volumes:
+#      - rabbitmq_data:/var/lib/rabbitmq
+
+  redis:
+    image: redis:alpine
+#    volumes:
+#      - redis_data:/data
+
+  db:
+    image: mysql:8.0
+    platform: linux/x86_64
+    environment:
+      MYSQL_DATABASE: laravel
+      MYSQL_USER: forge
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: secret
+#    volumes:
+#      - mysql_data:/var/lib/mysql
+
+  composer:
+    build:
+      context: .
+      dockerfile: ./.docker/php-fpm/Dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    volumes:
+      - ./laravel:/app:delegated
+    working_dir: /app
+    entrypoint: [ 'composer', '--ignore-platform-reqs' ]
+
+  npm-reservations:
+    image: node:18-alpine
+    volumes:
+      - ./laravel:/app
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+      - "5173:5173"
+    working_dir: /app
+    entrypoint: [ 'npm' ]
+
+  npm-emails:
+    image: node:18-alpine
+    volumes:
+      - ./node:/app
+    working_dir: /app
+    entrypoint: [ 'npm' ]
+
+  artisan:
+    build:
+      context: .
+      dockerfile: ./.docker/php-fpm/Dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    volumes:
+      - ./laravel:/app:delegated
+    entrypoint: [ 'php', '/app/artisan' ]
+
+volumes:
+  mysql_data:
+  redis_data:
+  rabbitmq_data:
